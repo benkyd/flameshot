@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2017-2019 Alejandro Sirgo Rica & Contributors
 
+#include <iostream>
 #include "imguruploader.h"
 #include "src/utils/confighandler.h"
 #include "src/utils/filenamehandler.h"
@@ -35,7 +36,7 @@ void ImgurUploader::handleReply(QNetworkReply* reply)
         QJsonDocument response = QJsonDocument::fromJson(reply->readAll());
         QJsonObject json = response.object();
         QJsonObject data = json[QStringLiteral("data")].toObject();
-        setImageURL(data[QStringLiteral("link")].toString());
+        setImageURL(data[QStringLiteral("url")].toString());
 
         auto deleteToken = data[QStringLiteral("deletehash")].toString();
 
@@ -64,23 +65,28 @@ void ImgurUploader::upload()
     QByteArray byteArray;
     QBuffer buffer(&byteArray);
     pixmap().save(&buffer, "PNG");
+    QString encoded = buffer.data().toBase64();
+
+    QJsonObject obj;
+    obj["img"] = "data:image/png;base64," + encoded + "==";
+    QJsonDocument doc(obj);
+    QByteArray data = doc.toJson();
 
     QUrlQuery urlQuery;
     urlQuery.addQueryItem(QStringLiteral("title"), QStringLiteral(""));
     QString description = FileNameHandler().parsedPattern();
     urlQuery.addQueryItem(QStringLiteral("description"), description);
 
-    QUrl url(QStringLiteral("https://api.imgur.com/3/image"));
+    QUrl url(QStringLiteral("http://127.0.0.1/image"));
     url.setQuery(urlQuery);
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader,
-                      "application/application/x-www-form-urlencoded");
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization",
                          QStringLiteral("Client-ID %1")
                            .arg(ConfigHandler().uploadClientSecret())
                            .toUtf8());
 
-    m_NetworkAM->post(request, byteArray);
+    m_NetworkAM->post(request, data);
 }
 
 void ImgurUploader::deleteImage(const QString& fileName,
